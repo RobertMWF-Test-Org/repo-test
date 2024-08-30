@@ -1,3 +1,3 @@
 # repo-test
 Test Repository
-Smart Commit
+Smart Commit Test
