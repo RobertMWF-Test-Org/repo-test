@@ -1,4 +1,4 @@
 # repo-test
 Test Repository
 
-Should a beautiful, fantastic README
+Should be a beautiful, fantastic README
