@@ -3,4 +3,4 @@ Test Repository
 
 README
 
-![alt text](https://github.com/RobertMWF-Test-Org/repo-test/blob/main/Goose.webp?raw=true)
+![Goose](https://upload.wikimedia.org/wikipedia/commons/3/39/Domestic_Goose.jpg)
