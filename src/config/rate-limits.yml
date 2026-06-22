@@ -1,0 +1,36 @@
+# Rate limit tiers — requests per minute unless noted
+# Applied per authenticated user per endpoint group
+
+tiers:
+  free:
+    default: 60
+    auth: 10
+    uploads: 5
+    exports: 2
+
+  pro:
+    default: 300
+    auth: 30
+    uploads: 20
+    exports: 10
+
+  enterprise:
+    default: 1000
+    auth: 100
+    uploads: 100
+    exports: 50
+
+# Sandbox overrides (developer portal test environment)
+sandbox:
+  default: 30
+  auth: 5
+  uploads: 2
+  exports: 1
+  note: "Sandbox rate limits reset every 60 minutes"
+
+# Response headers returned on every API call
+headers:
+  limit: X-RateLimit-Limit
+  remaining: X-RateLimit-Remaining
+  reset: X-RateLimit-Reset       # Unix timestamp
+  retry_after: Retry-After       # Seconds; only present on 429
