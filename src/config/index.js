@@ -34,9 +34,10 @@ export const JWT_ISSUER = process.env.JWT_ISSUER ?? "api.example.com";
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
 
-export const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-export const RATE_LIMIT_MAX_REQUESTS = 100;
-export const RATE_LIMIT_AUTH_MAX = 10;
+export const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+export const RATE_LIMIT_MAX_REQUESTS = 500;
+export const RATE_LIMIT_AUTH_MAX = 20;
+export const RATE_LIMIT_AUTH_WINDOW_MS = 60 * 1000;
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
