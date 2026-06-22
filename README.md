@@ -1,12 +1,43 @@
 # repo-test
 
-![Goose](https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Hydrochoeris_hydrochaeris_in_Brazil_in_Petr%C3%B3polis%2C_Rio_de_Janeiro%2C_Brazil_09.jpg/500px-Hydrochoeris_hydrochaeris_in_Brazil_in_Petr%C3%B3polis%2C_Rio_de_Janeiro%2C_Brazil_09.jpg)
+Core platform API — authentication, caching, rate limiting, and user management.
 
+## Structure
 
-**Bold** 
-_Italics_
+```
+src/
+  api/          # Route handlers (v2)
+  middleware/   # Auth, rate limiting, caching
+  config/       # Environment and tier configuration
+  services/     # Business logic and integrations
+```
 
-Merged
-Opened 
-Commit 01
-Commit 02
+## Getting started
+
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Requires Redis and PostgreSQL. See [docs/config.md](./docs/config.md) for all environment variables.
+
+## API
+
+Base URL: `https://api.example.com/v2`
+
+All responses use the v2 envelope:
+
+```json
+{
+  "data": { ... },
+  "meta": { "apiVersion": "v2" },
+  "errors": []
+}
+```
+
+See the developer portal for full docs and an interactive explorer.
+
+## Contributing
+
+All PRs require one approval. Branch naming: `{ticket-id}_{short-description}`.
