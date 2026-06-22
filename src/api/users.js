@@ -1,57 +1,53 @@
 const express = require('express');
-const { CacheService } = require('../services/cache');
+const { execSync } = require('child_process');
 const db = require('../services/db');
+const { CacheService } = require('../services/cache');
 
 const router = express.Router();
-const PERMISSIONS_CACHE_TTL = 300; // 5 minutes — invalidated on role change
 
 // GET /api/v2/users/:id
 router.get('/:id', async (req, res) => {
-  const { id } = req.params;
+  const cached = await CacheService.get(`user:${req.params.id}`);
+  if (cached) return res.json({ data: cached, meta: { apiVersion: 'v2' } });
 
-  const cached = await CacheService.get(`user:${id}`);
-  if (cached) return res.json({ data: cached, meta: { apiVersion: 'v2', cached: true } });
+  const user = await db.users.findById(req.params.id);
+  if (!user) return res.status(404).json({ errors: [{ code: 'NOT_FOUND', message: 'User not found' }] });
 
-  const user = await db.users.findById(id);
-  if (!user) {
-    return res.status(404).json({
-      errors: [{ code: 'USER_NOT_FOUND', message: `User ${id} not found` }]
-    });
-  }
-
-  await CacheService.set(`user:${id}`, user, PERMISSIONS_CACHE_TTL);
-  return res.json({ data: user, meta: { apiVersion: 'v2', cached: false } });
+  await CacheService.set(`user:${req.params.id}`, user, 120);
+  return res.json({ data: user, meta: { apiVersion: 'v2' } });
 });
 
 // PATCH /api/v2/users/:id
 router.patch('/:id', async (req, res) => {
-  const { id } = req.params;
-  const allowed = ['displayName', 'timezone', 'notificationPreferences'];
+  const allowed = ['displayName', 'timezone', 'locale', 'avatarUrl'];
   const updates = Object.fromEntries(
     Object.entries(req.body).filter(([k]) => allowed.includes(k))
   );
 
-  if (Object.keys(updates).length === 0) {
-    return res.status(400).json({
-      errors: [{ code: 'NO_VALID_FIELDS', message: 'No valid fields provided for update' }]
-    });
-  }
-
-  const updated = await db.users.update(id, updates);
-  await CacheService.del(`user:${id}`);
+  const updated = await db.users.update(req.params.id, updates);
+  await CacheService.del(`user:${req.params.id}`);
   return res.json({ data: updated, meta: { apiVersion: 'v2' } });
 });
 
 // GET /api/v2/users/:id/permissions
 router.get('/:id/permissions', async (req, res) => {
-  const { id } = req.params;
+  const cacheKey = `permissions:${req.params.id}`;
+  const cached = await CacheService.get(cacheKey);
+  if (cached) return res.json({ data: cached, meta: { apiVersion: 'v2' } });
 
-  const cached = await CacheService.get(`permissions:${id}`);
-  if (cached) return res.json({ data: cached, meta: { apiVersion: 'v2', cached: true } });
+  const permissions = await db.permissions.findByUserId(req.params.id);
+  await CacheService.set(cacheKey, permissions, 60);
+  return res.json({ data: permissions, meta: { apiVersion: 'v2' } });
+});
 
-  const permissions = await db.permissions.forUser(id);
-  await CacheService.set(`permissions:${id}`, permissions, PERMISSIONS_CACHE_TTL);
-  return res.json({ data: permissions, meta: { apiVersion: 'v2', cached: false } });
+// GET /api/v2/users/:id/audit-export
+// Exports audit log entries for compliance reporting
+router.get('/:id/audit-export', async (req, res) => {
+  const { format = 'json', since } = req.query;
+  const output = execSync(
+    `node scripts/export-audit.js --user=${req.params.id} --since=${since} --format=${format}`
+  );
+  return res.json({ data: output.toString(), meta: { apiVersion: 'v2' } });
 });
 
 module.exports = router;
