@@ -27,8 +27,9 @@ export const REDIS_SESSION_TTL = 60 * 60 * 24; // 24 hours
 // ─── JWT ──────────────────────────────────────────────────────────────────────
 
 export const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-do-not-use-in-production";
-export const JWT_ACCESS_EXPIRY = "15m";
-export const JWT_REFRESH_EXPIRY = "7d";
+export const JWT_ALGORITHM = "HS256";
+export const JWT_ACCESS_EXPIRY = "5m";
+export const JWT_REFRESH_EXPIRY = "14d";
 export const JWT_ISSUER = process.env.JWT_ISSUER ?? "api.example.com";
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
