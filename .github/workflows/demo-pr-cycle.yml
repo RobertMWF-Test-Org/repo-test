@@ -1,0 +1,88 @@
+name: Demo PR reporting-macro data
+
+on:
+  schedule:
+    # Runs 6x/day; each run has a random chance of actually creating a PR,
+    # so daily volume varies instead of being a flat, obviously-scripted count.
+    - cron: '0 */4 * * *'
+  workflow_dispatch: {}   # lets you trigger a run manually from the Actions tab
+
+jobs:
+  pr-cycle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Jitter start time
+        run: sleep $((RANDOM % 1800))   # up to 30 min, so runs don't all land on the hour
+
+      - name: Randomly skip this run
+        id: gate
+        run: |
+          # ~60% of scheduled runs actually do something
+          if [ $((RANDOM % 100)) -lt 60 ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping this run for natural variability."
+          fi
+
+      - name: Create branch + PR as creator
+        if: steps.gate.outputs.proceed == 'true'
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.PR_CREATOR_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          TITLES=(
+            "feat: add pagination to GET /api/v2/users"
+            "feat: implement webhook event delivery"
+            "feat: add SCIM user provisioning endpoint"
+            "feat: support OAuth2 PKCE for public clients"
+            "feat: add bulk user deactivation endpoint"
+            "fix: resolve cache stampede on concurrent logins"
+            "fix: correct 422 response schema for malformed JWT"
+            "fix: rate limiter window resets incorrectly"
+            "chore: upgrade jsonwebtoken to 9.0.2"
+            "refactor: extract JWT signing to dedicated service"
+            "test: add integration tests for token refresh flow"
+            "docs: update OpenAPI spec for v2 auth endpoints"
+          )
+          TITLE="${TITLES[$((RANDOM % ${#TITLES[@]}))]}"
+          SUFFIX=$(printf '%04x' $RANDOM)
+          PREFIX=$(echo "$TITLE" | cut -d: -f1)
+          SLUG=$(echo "$TITLE" | cut -d: -f2- | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-*//;s/-*$//' | cut -c1-40)
+          BRANCH="${PREFIX}/${SLUG}-${SUFFIX}"
+
+          SHA=$(gh api "repos/$REPO/git/ref/heads/main" --jq .object.sha)
+          gh api "repos/$REPO/git/refs" -f ref="refs/heads/$BRANCH" -f sha="$SHA" > /dev/null
+
+          CONTENT=$(printf "%s\n" "$TITLE" | base64 -w0)
+          SAFEPATH=$(echo "$BRANCH" | tr '/' '-')
+          gh api "repos/$REPO/contents/notes/${SAFEPATH}.md" -f message="$TITLE" -f content="$CONTENT" -f branch="$BRANCH" > /dev/null
+
+          PR_NUMBER=$(gh api "repos/$REPO/pulls" -f title="$TITLE" -f head="$BRANCH" -f base="main" -f body="Demo data for reporting-macro showcase." --jq .number)
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Created PR #$PR_NUMBER: $TITLE ($BRANCH)"
+
+      - name: Simulate review delay
+        if: steps.gate.outputs.proceed == 'true'
+        run: sleep $((RANDOM % 480 + 60))   # 1-9 min "review time"
+
+      - name: Approve as reviewer
+        if: steps.gate.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PR_APPROVER_PAT }}
+          REPO: ${{ github.repository }}
+          PR: ${{ steps.create.outputs.pr_number }}
+        run: |
+          gh api "repos/$REPO/pulls/$PR/reviews" -f event="APPROVE" -f body="LGTM" > /dev/null
+          echo "Approved PR #$PR"
+
+      - name: Merge as reviewer
+        if: steps.gate.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PR_APPROVER_PAT }}
+          REPO: ${{ github.repository }}
+          PR: ${{ steps.create.outputs.pr_number }}
+        run: |
+          gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method="squash" > /dev/null
+          echo "Merged PR #$PR"
