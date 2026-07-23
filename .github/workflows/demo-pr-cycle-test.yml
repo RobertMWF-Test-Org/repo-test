@@ -1,0 +1,47 @@
+name: Demo PR reporting-macro data (TEST - no jitter)
+
+on:
+  workflow_dispatch: {}   # manual trigger only, no schedule
+
+jobs:
+  pr-cycle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create branch + PR as creator
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.PR_CREATOR_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          TITLE="test: verify demo PR cycle works end to end"
+          SUFFIX=$(printf '%04x' $RANDOM)
+          BRANCH="test/verify-cycle-${SUFFIX}"
+
+          SHA=$(gh api "repos/$REPO/git/ref/heads/main" --jq .object.sha)
+          gh api "repos/$REPO/git/refs" -f ref="refs/heads/$BRANCH" -f sha="$SHA" > /dev/null
+
+          CONTENT=$(printf "%s\n" "$TITLE" | base64 -w0)
+          SAFEPATH=$(echo "$BRANCH" | tr '/' '-')
+          gh api "repos/$REPO/contents/notes/${SAFEPATH}.md" -f message="$TITLE" -f content="$CONTENT" -f branch="$BRANCH" > /dev/null
+
+          PR_NUMBER=$(gh api "repos/$REPO/pulls" -f title="$TITLE" -f head="$BRANCH" -f base="main" -f body="Test run, verifying the automation works." --jq .number)
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Created PR #$PR_NUMBER: $TITLE ($BRANCH)"
+
+      - name: Approve as reviewer
+        env:
+          GH_TOKEN: ${{ secrets.PR_APPROVER_PAT }}
+          REPO: ${{ github.repository }}
+          PR: ${{ steps.create.outputs.pr_number }}
+        run: |
+          gh api "repos/$REPO/pulls/$PR/reviews" -f event="APPROVE" -f body="LGTM" > /dev/null
+          echo "Approved PR #$PR"
+
+      - name: Merge as reviewer
+        env:
+          GH_TOKEN: ${{ secrets.PR_APPROVER_PAT }}
+          REPO: ${{ github.repository }}
+          PR: ${{ steps.create.outputs.pr_number }}
+        run: |
+          gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method="squash" > /dev/null
+          echo "Merged PR #$PR"
