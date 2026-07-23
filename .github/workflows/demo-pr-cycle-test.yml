@@ -7,6 +7,16 @@ jobs:
   pr-cycle:
     runs-on: ubuntu-latest
     steps:
+      - name: Whoami / repo access check
+        env:
+          GH_TOKEN: ${{ secrets.PR_CREATOR_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "PR_CREATOR_PAT authenticates as:"
+          gh api user --jq .login
+          echo "Can this identity see the repo?"
+          gh api "repos/$REPO" --jq '{full_name, permissions}'
+
       - name: Create branch + PR as creator
         id: create
         env:
