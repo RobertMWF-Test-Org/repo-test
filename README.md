@@ -40,4 +40,4 @@ See the developer portal for full docs and an interactive explorer.
 
 ## Contributing
 
-All PRs require one approval. Branch naming: `{ticket-id}_{short-description}`.
+All PRs require one approval. Branch naming: `{ticket-id}_{short-description}`.  
