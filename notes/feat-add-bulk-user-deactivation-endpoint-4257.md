@@ -1,0 +1,1 @@
+feat: add bulk user deactivation endpoint
