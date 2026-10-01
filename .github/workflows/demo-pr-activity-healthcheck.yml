@@ -1,0 +1,98 @@
+name: Demo PR Activity Health Check
+
+# Runs once daily, after the day's 9am-6pm Europe/Andorra creation window has
+# closed, to catch the exact failure mode that killed the previous demo-pr-cycle
+# workflow silently for months: a workflow that looks "active" but has stopped
+# actually producing anything. Checks:
+#   1. The generator workflow is still enabled
+#   2. No generator runs failed in the last 24h
+#   3. At least one demo PR was created today (on weekdays, once the window has started)
+#   4. No demo PR has been sitting open past a sane merge-due buffer
+# On any failure: the run itself fails (red X + GitHub's native failure
+# notification) AND it opens a GitHub issue with specifics, so there's a
+# visible record even if email notifications get missed.
+
+on:
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  actions: read
+  pull-requests: read
+  contents: read
+
+jobs:
+  healthcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run health check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          REPO="RobertMWF-Test-Org/repo-test"
+          TODAY_LOCAL=$(TZ=Europe/Andorra date +%F)
+          WINDOW_START="2026-10-01"
+          GRACE_END="2026-10-24"
+
+          if [[ "$TODAY_LOCAL" > "$GRACE_END" ]]; then
+            echo "Past the demo window + grace period ($GRACE_END) - nothing to check."
+            exit 0
+          fi
+
+          PROBLEMS=""
+
+          # 1. Is the generator workflow still enabled?
+          STATE=$(gh workflow view "Demo PR Activity Generator" --repo "$REPO" --json state -q .state 2>&1) || STATE="ERROR: $STATE"
+          echo "Generator workflow state: $STATE"
+          if [ "$STATE" != "active" ]; then
+            PROBLEMS="${PROBLEMS}- Generator workflow is not active (state: $STATE)\n"
+          fi
+
+          # 2. Any failed generator runs in the last 24h?
+          FAILED_JSON=$(gh run list --repo "$REPO" --workflow "demo-pr-activity.yml" --json conclusion,createdAt,url \
+            --jq '[.[] | select((now - (.createdAt | fromdateiso8601)) < 86400 and .conclusion == "failure")]')
+          FAILED_COUNT=$(echo "$FAILED_JSON" | jq 'length')
+          echo "Failed generator runs in last 24h: $FAILED_COUNT"
+          if [ "$FAILED_COUNT" -gt 0 ]; then
+            URLS=$(echo "$FAILED_JSON" | jq -r '.[].url' | tr '\n' ' ')
+            PROBLEMS="${PROBLEMS}- ${FAILED_COUNT} generator run(s) failed in the last 24h: ${URLS}\n"
+          fi
+
+          # 3. Expected activity: at least one demo PR created today (weekdays only, once window has started)
+          if [[ "$TODAY_LOCAL" > "$WINDOW_START" || "$TODAY_LOCAL" == "$WINDOW_START" ]]; then
+            DOW=$(TZ=Europe/Andorra date +%u)  # 1=Mon .. 7=Sun
+            if [ "$DOW" -le 5 ]; then
+              CREATED_TODAY=$(gh pr list --repo "$REPO" --state all --search "in:title \"[Demo]\" created:${TODAY_LOCAL}" --json number --jq 'length')
+              echo "Demo PRs created today: $CREATED_TODAY"
+              if [ "$CREATED_TODAY" -eq 0 ]; then
+                PROBLEMS="${PROBLEMS}- No demo PRs have been created today (${TODAY_LOCAL}), a weekday\n"
+              fi
+            fi
+          fi
+
+          # 4. Any demo PR stuck open well past a sane merge-due buffer (max delay is 10h)?
+          STUCK_JSON=$(gh pr list --repo "$REPO" --state open --search 'in:title "[Demo]"' --json number,createdAt,url \
+            --jq '[.[] | select(((now - (.createdAt | fromdateiso8601)) / 3600) > 14)]')
+          STUCK_COUNT=$(echo "$STUCK_JSON" | jq 'length')
+          echo "Demo PRs open >14h: $STUCK_COUNT"
+          if [ "$STUCK_COUNT" -gt 0 ]; then
+            URLS=$(echo "$STUCK_JSON" | jq -r '.[].url' | tr '\n' ' ')
+            PROBLEMS="${PROBLEMS}- ${STUCK_COUNT} demo PR(s) open more than 14h without merging (merge step may be broken): ${URLS}\n"
+          fi
+
+          if [ -n "$PROBLEMS" ]; then
+            echo -e "PROBLEMS DETECTED:\n$PROBLEMS"
+            BODY=$(printf "The daily health check found issues with the demo PR activity generator on %s:\n\n%b\nCheck the Actions tab for the generator's own run logs." "$TODAY_LOCAL" "$PROBLEMS")
+            gh issue create --repo "$REPO" \
+              --title "Demo PR automation health check failed - ${TODAY_LOCAL}" \
+              --body "$BODY" || echo "::warning::Could not create issue, but problems were detected - see logs above."
+            exit 1
+          fi
+
+          echo "All checks passed for ${TODAY_LOCAL}."
