@@ -47,8 +47,8 @@ jobs:
 
           PROBLEMS=""
 
-          # 1. Is the generator workflow still enabled?
-          STATE=$(gh workflow view "Demo PR Activity Generator" --repo "$REPO" --json state -q .state 2>&1) || STATE="ERROR: $STATE"
+          # 1. Is the generator workflow still enabled? (gh workflow view has no --json; use workflow list instead)
+          STATE=$(gh workflow list --repo "$REPO" --all --json name,state --jq '.[] | select(.name=="Demo PR Activity Generator") | .state')
           echo "Generator workflow state: $STATE"
           if [ "$STATE" != "active" ]; then
             PROBLEMS="${PROBLEMS}- Generator workflow is not active (state: $STATE)\n"
@@ -76,8 +76,10 @@ jobs:
             fi
           fi
 
-          # 4. Any demo PR stuck open well past a sane merge-due buffer (max delay is 10h)?
-          STUCK_JSON=$(gh pr list --repo "$REPO" --state open --search 'in:title "[Demo]"' --json number,createdAt,url \
+          # 4. Any demo PR stuck open well past a sane merge-due buffer (max delay is 10h).
+          # Scoped to the demo window itself - pre-existing PRs from unrelated earlier
+          # testing (e.g. old manually-created test PRs) shouldn't trip this check.
+          STUCK_JSON=$(gh pr list --repo "$REPO" --state open --search "in:title \"[Demo]\" created:>=${WINDOW_START}" --json number,createdAt,url \
             --jq '[.[] | select(((now - (.createdAt | fromdateiso8601)) / 3600) > 14)]')
           STUCK_COUNT=$(echo "$STUCK_JSON" | jq 'length')
           echo "Demo PRs open >14h: $STUCK_COUNT"
