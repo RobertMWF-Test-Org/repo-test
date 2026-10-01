@@ -1,0 +1,27 @@
+name: Demo PR Activity Generator
+
+# Hourly, 7am-4pm UTC (9am-6pm Europe/Andorra) every day. The script itself
+# decides, per run, whether anything should actually happen - see
+# .github/scripts/demo_pr_activity.py for the real scheduling logic
+# (weekday/weekend targets, randomized timing, the 2026-10-01..2026-10-21
+# demo window). This cron just sets the outer tick rate.
+on:
+  schedule:
+    - cron: "0 7-16 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Run demo PR activity generator
+        env:
+          OPENER_TOKEN: ${{ secrets.OPENER_TOKEN }}
+          APPROVER_TOKEN: ${{ secrets.APPROVER_TOKEN }}
+        run: python3 .github/scripts/demo_pr_activity.py
