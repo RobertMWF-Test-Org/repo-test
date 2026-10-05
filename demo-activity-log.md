@@ -1,2 +1,8 @@
 - 2026-10-01T03:16:33.372780+00:00 setup validation entry (safe to ignore)
 - 2026-10-01T20:10:17.482017+00:00 synthetic demo activity entry
+- 2026-10-01T20:10:12.822430+00:00 synthetic demo activity entry
+- 2026-10-01T14:16:34.612369+00:00 synthetic demo activity entry
+- 2026-10-01T14:16:31.284036+00:00 synthetic demo activity entry
+- 2026-10-01T14:16:27.164200+00:00 synthetic demo activity entry
+- 2026-10-01T20:10:21.306575+00:00 synthetic demo activity entry
+- 2026-10-02T19:01:36.595514+00:00 synthetic demo activity entry

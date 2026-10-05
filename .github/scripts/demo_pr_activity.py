@@ -101,11 +101,16 @@ def main():
         run("git reset --hard origin/main")
         run(f"git checkout -b {branch}")
 
-        log_line = f"- {ts.isoformat()} synthetic demo activity entry\n"
-        with open("demo-activity-log.md", "a") as f:
-            f.write(log_line)
+        # Each PR gets its own file (not a shared log) so that out-of-order or
+        # concurrent merges can never conflict with each other structurally -
+        # previously every PR appended to the same demo-activity-log.md, which
+        # produced real merge conflicts once more than one PR was open at once.
+        os.makedirs("demo-logs", exist_ok=True)
+        log_path = f"demo-logs/activity-{ts.strftime('%Y%m%d%H%M%S')}-{suffix}.md"
+        with open(log_path, "w") as f:
+            f.write(f"Synthetic demo activity entry - {ts.isoformat()}\n")
 
-        run('git -c user.name="GHClaudio-test" -c user.email="GHClaudio-test@users.noreply.github.com" add demo-activity-log.md')
+        run(f'git -c user.name="GHClaudio-test" -c user.email="GHClaudio-test@users.noreply.github.com" add {log_path}')
         run('git -c user.name="GHClaudio-test" -c user.email="GHClaudio-test@users.noreply.github.com" commit -m "demo: synthetic activity entry"')
         run(f"git push https://{OPENER_TOKEN}@github.com/{REPO}.git {branch}:{branch}")
 
@@ -149,16 +154,22 @@ def main():
 
         if due <= now_utc:
             num = pr["number"]
-            run(
-                f'gh pr review {num} --repo {REPO} --approve --body "Approved - synthetic demo PR."',
-                env_overrides=approver_env,
-            )
-            run(
-                f'gh pr merge {num} --repo {REPO} --merge --delete-branch',
-                env_overrides=approver_env,
-            )
-            merged_count += 1
-            print(f"Approved and merged PR #{num}")
+            try:
+                run(
+                    f'gh pr review {num} --repo {REPO} --approve --body "Approved - synthetic demo PR."',
+                    env_overrides=approver_env,
+                )
+                run(
+                    f'gh pr merge {num} --repo {REPO} --merge --delete-branch',
+                    env_overrides=approver_env,
+                )
+                merged_count += 1
+                print(f"Approved and merged PR #{num}")
+            except SystemExit:
+                # One PR failing to merge (e.g. a stale/conflicting branch)
+                # must not block every other eligible PR in this run - log it
+                # and keep going instead of aborting the whole script.
+                print(f"Could not merge PR #{num}, skipping it this run", file=sys.stderr)
 
     print(f"Run summary: created {to_create}, merged {merged_count}")
 
