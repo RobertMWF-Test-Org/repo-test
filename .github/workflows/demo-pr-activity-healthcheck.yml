@@ -64,15 +64,22 @@ jobs:
             PROBLEMS="${PROBLEMS}- ${FAILED_COUNT} generator run(s) failed in the last 24h: ${URLS}\n"
           fi
 
-          # 3. Expected activity: at least one demo PR created today (weekdays only, once window has started)
+          # 3. Expected activity: at least one demo PR created today (weekdays only, once window has started).
+          # Scheduled GitHub Actions runs can fire hours late (this workflow is meant to run at
+          # ~9pm local, after the 9am-6pm window closes, but has been observed firing as early as
+          # 2am local) - so this only checks once the window would plausibly have closed, rather
+          # than trusting the cron to have fired at the intended time.
+          HOUR_LOCAL=$(TZ=Europe/Andorra date +%H)
           if [[ "$TODAY_LOCAL" > "$WINDOW_START" || "$TODAY_LOCAL" == "$WINDOW_START" ]]; then
             DOW=$(TZ=Europe/Andorra date +%u)  # 1=Mon .. 7=Sun
-            if [ "$DOW" -le 5 ]; then
+            if [ "$DOW" -le 5 ] && [ "$HOUR_LOCAL" -ge 18 ]; then
               CREATED_TODAY=$(gh pr list --repo "$REPO" --state all --search "in:title \"[Demo]\" created:${TODAY_LOCAL}" --json number --jq 'length')
               echo "Demo PRs created today: $CREATED_TODAY"
               if [ "$CREATED_TODAY" -eq 0 ]; then
                 PROBLEMS="${PROBLEMS}- No demo PRs have been created today (${TODAY_LOCAL}), a weekday\n"
               fi
+            else
+              echo "Skipping today's-activity check: ${HOUR_LOCAL}:00 local is before the window could plausibly have closed"
             fi
           fi
 
